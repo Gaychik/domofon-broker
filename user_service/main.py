@@ -19,10 +19,7 @@ LOGGING_SERVICE_URL = os.getenv("LOGGING_SERVICE_URL", "http://logging_service:8
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception:
-    pass  # БД недоступна — тесты запущены без docker-compose
+Base.metadata.create_all(bind=engine)
 
 
 @app.post("/users")
