@@ -26,6 +26,8 @@ async def send_notification(request: Request):
 
     data = await request.json()
     
+    data["timestamp"] = datetime.utcnow().isoformat()
+
     logger.info(f"NOTIFICATION: {data}")
     
     return {"status": "notified"}
