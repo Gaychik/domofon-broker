@@ -1,31 +1,31 @@
-from fastapi import FastAPI, Request
 import logging
-from datetime import datetime
 
-# ПРОБЛЕМА: Формат логов 
+from fastapi import FastAPI, Request
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-    
+
 app = FastAPI(title="Logging Service")
 
-#Логирование событий
+
+# Логирование событий
 @app.post("/log")
 async def log_event(request: Request):
-  
+
     data = await request.json()
 
     logger.info(f"EVENT: {data}")
-    
+
     return {"status": "logged"}
 
 
-#Отправка уведомлений (Observer pattern)
+# Отправка уведомлений (Observer pattern)
 # ПРОБЛЕМА: Этот эндпоинт существует, но никто его не вызывает
-@app.post("/notification")
-async def send_notification(request: Request):
+# @app.post("/notification")
+# async def send_notification(request: Request):
 
-    data = await request.json()
-    
-    logger.info(f"NOTIFICATION: {data}")
-    
-    return {"status": "notified"}
+#     data = await request.json()
+
+#     logger.info(f"NOTIFICATION: {data}")
+
+#     return {"status": "notified"}
