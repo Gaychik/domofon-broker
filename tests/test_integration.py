@@ -1,45 +1,89 @@
-import pytest
+import asyncio
+import time
+
 import httpx
+import pytest
+
 
 class TestIntegration:
-    
     @pytest.mark.asyncio
     async def test_full_call_flow(self):
-        #Сквозной тест: создание пользователя -> звонок -> история
-        
+        """Сквозной тест: создание пользователя → звонок → история"""
+        phone = f"+7999{int(time.time())}"
+
         async with httpx.AsyncClient() as client:
-            # 1. Создаем пользователя
-            user_response = await client.post(
+            resp = await client.post(
                 "http://localhost:8000/users",
-                json={"phone": "+79991112233", "name": "Integration Test"}
+                json={"phone": phone, "name": "Integration Test"},
             )
-            
-            # Этот тест покажет все проблемы системы
-            if user_response.status_code == 200:
-                user_id = user_response.json().get("id")
-                
-                # 2. Совершаем звонок
-                call_response = await client.post(
-                    "http://localhost:8000/call/initiate",
-                    json={"user_id": user_id}
-                )
-                
-                # 3. Получаем историю
-                history_response = await client.get(f"http://localhost:8000/history/{user_id}")
-                
-                # Ожидаем, что история не пуста
-                assert len(history_response.json()) > 0
-    
+            assert resp.status_code == 200
+            user_id = resp.json()["id"]
+            assert resp.json()["phone"] == phone
+            assert resp.json()["name"] == "Integration Test"
+
+            resp = await client.post(
+                "http://localhost:8000/call/initiate",
+                headers={"X-User-Token": "test"},
+                json={"user_id": user_id},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["user_id"] == user_id
+            assert resp.json()["call_status"] in {"answered", "busy", "no_answer"}
+
+            await asyncio.sleep(2)
+
+            resp = await client.get(
+                f"http://localhost:8000/history/{user_id}",
+                headers={"X-User-Token": "test"},
+            )
+            assert resp.status_code == 200
+            assert len(resp.json()) > 0, resp.text
+            assert resp.json()[0]["status"] in {"answered", "busy", "no_answer"}
+
     @pytest.mark.asyncio
-    async def test_rate_limiting(self):
-        #Тест rate limiting
+    async def test_auth_required(self):
+        """Без X-User-Token защищённые эндпоинты возвращают 401"""
         async with httpx.AsyncClient() as client:
-            # Отправляем 20 запросов подряд
-            responses = []
-            for i in range(20):
-                response = await client.get("http://localhost:8000/users/1")
-                responses.append(response)
-            
-            # Некоторые запросы должны получить 429 Too Many Requests
-            status_codes = [r.status_code for r in responses]
-            assert 429 in status_codes
+            assert (
+                await client.get("http://localhost:8000/users/1")
+            ).status_code == 401
+            assert (
+                await client.get("http://localhost:8000/history/1")
+            ).status_code == 401
+            assert (
+                await client.post(
+                    "http://localhost:8000/call/initiate", json={"user_id": 1}
+                )
+            ).status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_user(self):
+        """Получение созданного пользователя."""
+        phone = f"+7998{int(time.time())}"
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "http://localhost:8000/users",
+                json={"phone": phone, "name": "Get Test"},
+            )
+            assert resp.status_code == 200
+            user_id = resp.json()["id"]
+
+            resp = await client.get(
+                f"http://localhost:8000/users/{user_id}",
+                headers={"X-User-Token": "test"},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["phone"] == phone
+
+    @pytest.mark.asyncio
+    async def test_z_rate_limiting(self):
+        """После 60 запросов должен быть 429"""
+        async with httpx.AsyncClient() as client:
+            codes = []
+            for _ in range(65):
+                resp = await client.get(
+                    "http://localhost:8000/users/1",
+                    headers={"X-User-Token": "test"},
+                )
+                codes.append(resp.status_code)
+            assert 429 in codes
