@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15
@@ -35,7 +33,8 @@ services:
     environment:
       DATABASE_URL: postgresql://domofon:domofon123@postgres:5432/domofon
       REDIS_URL: redis://redis:6379
-      PROVIDER_URL: http://localhost:8003
+      PROVIDER_URL: http://call_provider:8003
+      LOGGING_SERVICE_URL: http://logging_service:8004
     depends_on:
       - postgres
       - redis
@@ -45,7 +44,7 @@ services:
     ports:
       - "8003:8003"
     environment:
-      CALL_SERVICE_URL: http://localhost:8002
+      CALL_SERVICE_URL: http://call_service:8002
     depends_on:
       - call_service
 
@@ -61,6 +60,8 @@ services:
     environment:
       USER_SERVICE_URL: http://user_service:8001
       CALL_SERVICE_URL: http://call_service:8002
+      JWT_SECRET_KEY: supersecretkeychangeinproduction
+      JWT_ALGORITHM: HS256
     depends_on:
       - user_service
       - call_service
