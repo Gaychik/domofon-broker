@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from pydantic import BaseModel
 import httpx
 import os
 import random
@@ -8,12 +9,16 @@ load_dotenv()
 
 app = FastAPI(title="Call Provider")
 
-# ПРОБЛЕМА: Неправильный URL для Call Service
-# ПРОБЛЕМА: Пытается отправить результат обратно в Call Service,
-CALL_SERVICE_URL = os.getenv("CALL_SERVICE_URL", "http://localhost:8002")
+# ИСПРАВЛЕНИЕ #3: Правильный URL для Call Service (Docker service name вместо localhost)
+CALL_SERVICE_URL = os.getenv("CALL_SERVICE_URL", "http://call_service:8002")
+
+
+class CallRequest(BaseModel):
+    user_id: int
+
 
 @app.post("/call")
-async def make_call(user_id: int):
+async def make_call(call_data: CallRequest):
     #Симуляция внешнего провайдера звонков
     
     # Симуляция обработки звонка
@@ -28,11 +33,11 @@ async def make_call(user_id: int):
     async with httpx.AsyncClient() as client:
         try:
             await client.post(f"{CALL_SERVICE_URL}/call/callback", json={
-                "user_id": user_id,
+                "user_id": call_data.user_id,
                 "status": status
             })
         except:
             # Ошибка соединения с Call Service
             pass
     
-    return {"status": status, "user_id": user_id}
+    return {"status": status, "user_id": call_data.user_id}

@@ -1,45 +1,81 @@
 import pytest
 import httpx
 
+
 class TestIntegration:
-    
+    """Интеграционные тесты — требуют запущенного docker-compose"""
+
+    async def _get_token(self, client: httpx.AsyncClient) -> str:
+        response = await client.post(
+            "http://localhost:8000/api/auth/login",
+            json={"username": "admin", "password": "admin123"}
+        )
+        return response.json()["access_token"]
+
     @pytest.mark.asyncio
     async def test_full_call_flow(self):
-        #Сквозной тест: создание пользователя -> звонок -> история
-        
+        """Сквозной тест: создание пользователя -> звонок -> история"""
         async with httpx.AsyncClient() as client:
-            # 1. Создаем пользователя
+            token = await self._get_token(client)
+            headers = {"Authorization": f"Bearer {token}"}
+
             user_response = await client.post(
                 "http://localhost:8000/users",
-                json={"phone": "+79991112233", "name": "Integration Test"}
+                json={"phone": "+79991112233", "name": "Integration Test"},
+                headers=headers
             )
-            
-            # Этот тест покажет все проблемы системы
-            if user_response.status_code == 200:
-                user_id = user_response.json().get("id")
-                
-                # 2. Совершаем звонок
-                call_response = await client.post(
-                    "http://localhost:8000/call/initiate",
-                    json={"user_id": user_id}
-                )
-                
-                # 3. Получаем историю
-                history_response = await client.get(f"http://localhost:8000/history/{user_id}")
-                
-                # Ожидаем, что история не пуста
-                assert len(history_response.json()) > 0
-    
+            assert user_response.status_code == 200
+            user_id = user_response.json().get("id")
+
+            call_response = await client.post(
+                "http://localhost:8000/call/initiate",
+                json={"user_id": user_id},
+                headers=headers
+            )
+            assert call_response.status_code == 200
+
+            history_response = await client.get(
+                f"http://localhost:8000/history/{user_id}", headers=headers
+            )
+            assert len(history_response.json()) > 0
+
+    @pytest.mark.asyncio
+    async def test_duplicate_phone_rejected(self):
+        """Проблема #7: Два пользователя с одинаковым телефоном"""
+        async with httpx.AsyncClient() as client:
+            token = await self._get_token(client)
+            headers = {"Authorization": f"Bearer {token}"}
+
+            await client.post(
+                "http://localhost:8000/users",
+                json={"phone": "+79990001111", "name": "User1"},
+                headers=headers
+            )
+            response = await client.post(
+                "http://localhost:8000/users",
+                json={"phone": "+79990001111", "name": "User2"},
+                headers=headers
+            )
+            assert response.status_code == 400
+
     @pytest.mark.asyncio
     async def test_rate_limiting(self):
-        #Тест rate limiting
+        """Проблема #9: Rate limiting"""
         async with httpx.AsyncClient() as client:
-            # Отправляем 20 запросов подряд
+            token = await self._get_token(client)
+            headers = {"Authorization": f"Bearer {token}"}
             responses = []
             for i in range(20):
-                response = await client.get("http://localhost:8000/users/1")
+                response = await client.get(
+                    "http://localhost:8000/users/1", headers=headers
+                )
                 responses.append(response)
-            
-            # Некоторые запросы должны получить 429 Too Many Requests
             status_codes = [r.status_code for r in responses]
             assert 429 in status_codes
+
+    @pytest.mark.asyncio
+    async def test_auth_required(self):
+        """Проблема #5: Запросы без токена отклоняются"""
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:8000/users/1")
+            assert response.status_code == 401
