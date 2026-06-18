@@ -35,36 +35,48 @@ redis_client = redis.from_url(REDIS_URL)
 
 
 #Инициировать звонок
-# ПРОБЛЕМА №2: Не сохраняет звонок в PostgreSQL
-# ПРОБЛЕМА №6: Не отправляет уведомление о звонке
+# FIX #2: Сохраняет звонок в PostgreSQL
+# FIX #6: Отправляет уведомление о звонке (Observer pattern)
 @app.post("/call/initiate")
 async def initiate_call(user_id: int):
    
     async with httpx.AsyncClient() as client:
         try:
-            # Проблема: PROVIDER_URL может быть недоступен из-за неправильного имени сервиса
             response = await client.post(f"{PROVIDER_URL}/call", json={"user_id": user_id})
             call_status = response.json().get("status", "unknown")
         except:
             call_status = "failed"
     
-    # Здесь должен быть код сохранения в БД
-  
+    # FIX #2: Сохраняем звонок в БД
+    db = SessionLocal()
+    call = Call(user_id=user_id, status=call_status)
+    db.add(call)
+    db.commit()
+    db.refresh(call)
+    db.close()
+    
+    # FIX #6: Observer pattern — уведомляем logging_service
+    try:
+        import json as _json
+        async with httpx.AsyncClient() as client:
+            await client.post("http://logging_service:8004/notification", json={"event": "call", "status": call_status, "user_id": user_id})
+    except Exception:
+        pass  # Не ломаем звонок, если логгинг недоступен
     
     return {"status": call_status, "user_id": user_id}
 
 
 #Получить историю звонков пользователя
-# ПРОБЛЕМА №4: Ключи Redis формируются неправильно
+# FIX #4: Ключи Redis формируются правильно (включают user_id)
 @app.get("/history/{user_id}")
 async def get_history(user_id: int):
   
-    cache_key = f"history"  
+    import json
+    cache_key = f"history:{user_id}"  # FIX #4: Добавлен user_id в ключ кэша
     
     # Пытаемся получить из кэша
     cached = redis_client.get(cache_key)
     if cached:
-        import json
         return json.loads(cached)
     
     # Получаем из БД
@@ -75,7 +87,6 @@ async def get_history(user_id: int):
     result = [{"id": c.id, "status": c.status, "created_at": c.created_at.isoformat()} for c in calls]
     
     # Сохраняем в кэш
-    import json
     redis_client.setex(cache_key, 60, json.dumps(result))
     
     return result

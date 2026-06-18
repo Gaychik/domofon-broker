@@ -3,15 +3,26 @@ import time
 from collections import defaultdict
 
 class RateLimiter:
-    def __init__(self, requests_per_minute: int = 60):
-        self.requests_per_minute = requests_per_minute
+    def __init__(self, max_requests: int = 10, window_seconds: int = 1):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
         self.requests = defaultdict(list)
     
     async def check_rate_limit(self, request: Request):
-        # ОШИБКА: функция не реализована
-        # TODO: Реализовать проверку количества запросов от одного IP
-        # Если превышено - выбрасывать HTTPException(status_code=429)
-        pass
+        # FIX #9: Реализована проверка количества запросов от одного IP
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        
+        # Удаляем устаревшие записи
+        self.requests[client_ip] = [
+            t for t in self.requests[client_ip] if now - t < self.window_seconds
+        ]
+        
+        # Проверяем лимит
+        if len(self.requests[client_ip]) >= self.max_requests:
+            raise HTTPException(status_code=429, detail="Too many requests")
+        
+        self.requests[client_ip].append(now)
 
-# ОШИБКА: rate limiter не подключён к middleware
-rate_limiter = RateLimiter()
+# Rate limiter: 10 запросов в секунду
+rate_limiter = RateLimiter(max_requests=10, window_seconds=1)

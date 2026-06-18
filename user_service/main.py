@@ -27,18 +27,32 @@ class User(Base):
 Base.metadata.create_all(bind=engine)
 
 #Создание пользователя
-# ПРОБЛЕМА: Нет проверки на существующий телефон
-# ПРОБЛЕМА: Не отправляет событие в Logging Service
+# FIX #7: Добавлена проверка на существующий телефон
+# FIX #1: Добавлена отправка события в Logging Service
 
 @app.post("/users")
 async def create_user(phone: str, name: str):
-
     
     db = SessionLocal()
+    
+    # FIX #7: Проверяем, есть ли уже пользователь с таким телефоном
+    existing = db.query(User).filter(User.phone == phone).first()
+    if existing:
+        db.close()
+        raise HTTPException(status_code=400, detail="Phone number already registered")
+    
     user = User(phone=phone, name=name)
     db.add(user)
     db.commit()
     db.refresh(user)
+    
+    # FIX #1: Отправляем событие в Logging Service
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(f"{LOGGING_SERVICE_URL}/log", json={"event": "user_created", "user_id": user.id, "phone": phone})
+    except Exception:
+        pass  # Не ломаем создание, если логгинг недоступен
+    
     db.close()
     
     return {"id": user.id, "phone": user.phone, "name": user.name}
