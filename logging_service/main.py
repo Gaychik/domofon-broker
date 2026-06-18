@@ -9,10 +9,14 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Logging Service")
 
 #Логирование событий
+# FIX #8: Добавлен timestamp в логи
 @app.post("/log")
 async def log_event(request: Request):
   
     data = await request.json()
+    
+    # FIX #8: Добавляем timestamp к данным
+    data["timestamp"] = datetime.utcnow().isoformat()
 
     logger.info(f"EVENT: {data}")
     
@@ -20,11 +24,14 @@ async def log_event(request: Request):
 
 
 #Отправка уведомлений (Observer pattern)
-# ПРОБЛЕМА: Этот эндпоинт существует, но никто его не вызывает
+# FIX #8: Добавлен timestamp в уведомления
 @app.post("/notification")
 async def send_notification(request: Request):
 
     data = await request.json()
+    
+    # FIX #8: Добавляем timestamp
+    data["timestamp"] = datetime.utcnow().isoformat()
     
     logger.info(f"NOTIFICATION: {data}")
     
