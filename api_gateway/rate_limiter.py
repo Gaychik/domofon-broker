@@ -8,10 +8,17 @@ class RateLimiter:
         self.requests = defaultdict(list)
     
     async def check_rate_limit(self, request: Request):
-        # ОШИБКА: функция не реализована
-        # TODO: Реализовать проверку количества запросов от одного IP
-        # Если превышено - выбрасывать HTTPException(status_code=429)
-        pass
+        # Sliding window — не больше 10 запросов в секунду
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        window = 1  
+        max_requests = 10  
+        self.requests[client_ip] = [
+            t for t in self.requests[client_ip] if now - t < window
+        ]
+        self.requests[client_ip].append(now)
+        if len(self.requests[client_ip]) > max_requests:
+            raise HTTPException(status_code=429, detail="Too Many Requests")
 
-# ОШИБКА: rate limiter не подключён к middleware
+# Rate limiter: sliding window — 10 запросов в секунду на IP, при превышении HTTPException 429
 rate_limiter = RateLimiter()

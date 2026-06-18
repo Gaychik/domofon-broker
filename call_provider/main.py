@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 import httpx
 import os
 import random
@@ -8,12 +8,11 @@ load_dotenv()
 
 app = FastAPI(title="Call Provider")
 
-# ПРОБЛЕМА: Неправильный URL для Call Service
-# ПРОБЛЕМА: Пытается отправить результат обратно в Call Service,
-CALL_SERVICE_URL = os.getenv("CALL_SERVICE_URL", "http://localhost:8002")
+# URL Call Service через Docker имя сервиса
+CALL_SERVICE_URL = os.getenv("CALL_SERVICE_URL", "http://call_service:8002")
 
 @app.post("/call")
-async def make_call(user_id: int):
+async def make_call(user_id: int = Body(..., embed=True)):
     #Симуляция внешнего провайдера звонков
     
     # Симуляция обработки звонка

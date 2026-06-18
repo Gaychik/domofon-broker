@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -27,20 +27,35 @@ class User(Base):
 Base.metadata.create_all(bind=engine)
 
 #Создание пользователя
-# ПРОБЛЕМА: Нет проверки на существующий телефон
-# ПРОБЛЕМА: Не отправляет событие в Logging Service
+# Проверка уникальности телефона + логирование в Logging Service
 
 @app.post("/users")
-async def create_user(phone: str, name: str):
+async def create_user(phone: str = Body(...), name: str = Body(...)):
 
-    
+    # Проверка уникальности телефона
     db = SessionLocal()
+    existing = db.query(User).filter(User.phone == phone).first()
+    if existing:
+        db.close()
+        raise HTTPException(status_code=400, detail="Phone already exists")
+
     user = User(phone=phone, name=name)
     db.add(user)
     db.commit()
     db.refresh(user)
     db.close()
-    
+
+    # Отправляем событие в Logging Service
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(f"{LOGGING_SERVICE_URL}/log", json={
+                "event": "user_created",
+                "user_id": user.id,
+                "phone": user.phone
+            })
+        except:
+            pass
+
     return {"id": user.id, "phone": user.phone, "name": user.name}
 
 
