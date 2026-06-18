@@ -1,5 +1,7 @@
 import pytest
 import httpx
+import asyncio
+import uuid
 
 
 class TestIntegration:
@@ -15,16 +17,18 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_full_call_flow(self):
         """Сквозной тест: создание пользователя -> звонок -> история"""
+        # Уникальный телефон, чтобы избежать конфликтов между запусками
+        unique_phone = f"+7999{uuid.uuid4().hex[:7]}"
         async with httpx.AsyncClient() as client:
             token = await self._get_token(client)
             headers = {"Authorization": f"Bearer {token}"}
 
             user_response = await client.post(
                 "http://localhost:8000/users",
-                json={"phone": "+79991112233", "name": "Integration Test"},
+                json={"phone": unique_phone, "name": "Integration Test"},
                 headers=headers
             )
-            assert user_response.status_code == 200
+            assert user_response.status_code == 200, user_response.text
             user_id = user_response.json().get("id")
 
             call_response = await client.post(
@@ -76,6 +80,8 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_auth_required(self):
         """Проблема #5: Запросы без токена отклоняются"""
+        # Ждём, чтобы окно rate limiter (1 сек) истекло после предыдущих тестов
+        await asyncio.sleep(1.1)
         async with httpx.AsyncClient() as client:
             response = await client.get("http://localhost:8000/users/1")
             assert response.status_code == 401
