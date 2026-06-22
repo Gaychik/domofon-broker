@@ -1,9 +1,12 @@
 from fastapi import FastAPI, Request
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ПРОБЛЕМА: Формат логов 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
     
 app = FastAPI(title="Logging Service")
@@ -11,9 +14,8 @@ app = FastAPI(title="Logging Service")
 #Логирование событий
 @app.post("/log")
 async def log_event(request: Request):
-  
     data = await request.json()
-
+    data["timestamp"] = datetime.now(timezone.utc).isoformat()
     logger.info(f"EVENT: {data}")
     
     return {"status": "logged"}
@@ -23,9 +25,8 @@ async def log_event(request: Request):
 # ПРОБЛЕМА: Этот эндпоинт существует, но никто его не вызывает
 @app.post("/notification")
 async def send_notification(request: Request):
-
     data = await request.json()
-    
+    data["timestamp"] = datetime.now(timezone.utc).isoformat()
     logger.info(f"NOTIFICATION: {data}")
     
     return {"status": "notified"}
