@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: domofon
+      POSTGRES_PASSWORD: domofon123
+      POSTGRES_DB: domofon
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  user_service:
+    build:
+      context: ./user_service
+      dockerfile: DockerFile
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql://domofon:domofon123@postgres:5432/domofon
+      LOGGING_SERVICE_URL: http://logging_service:8004
+    depends_on:
+      - postgres
+      - logging_service
+
+  call_service:
+    build:
+      context: ./call_service
+      dockerfile: DockerFile
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql://domofon:domofon123@postgres:5432/domofon
+      REDIS_URL: redis://redis:6379
+      PROVIDER_URL: http://call_provider:8003
+      LOGGING_SERVICE_URL: http://logging_service:8004
+    depends_on:
+      - postgres
+      - redis
+      - logging_service
+
+  call_provider:
+    build:
+      context: ./call_provider
+      dockerfile: DockerFile
+    ports:
+      - "8003:8003"
+    environment:
+      CALL_SERVICE_URL: http://call_service:8002
+      LOGGING_SERVICE_URL: http://logging_service:8004
+    depends_on:
+      - call_service
+      - logging_service
+
+  logging_service:
+    build:
+      context: ./logging_service
+      dockerfile: DockerFile
+    ports:
+      - "8004:8004"
+
+  api_gateway:
+    build:
+      context: ./api_gateway
+      dockerfile: DockerFile
+    ports:
+      - "8000:8000"
+    environment:
+      USER_SERVICE_URL: http://user_service:8001
+      CALL_SERVICE_URL: http://call_service:8002
+      JWT_SECRET_KEY: supersecretkeychangeinproduction
+      JWT_ALGORITHM: HS256
+    depends_on:
+      - user_service
+      - call_service
+
+volumes:
+  postgres_data:
