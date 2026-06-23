@@ -3,6 +3,10 @@ import logging
 from datetime import datetime
 
 # ПРОБЛЕМА: Формат логов 
+# ↓ ↓ ↓
+# ФИКС: причина: не верный формат, библиотека datetime импортирована, но не используется
+# ФИКС: Добавлено отображение времени в логах(строка 21 и 35)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
     
@@ -13,6 +17,8 @@ app = FastAPI(title="Logging Service")
 async def log_event(request: Request):
   
     data = await request.json()
+
+    data["timestamp"] = datetime.utcnow().isoformat()
 
     logger.info(f"EVENT: {data}")
     
@@ -25,6 +31,8 @@ async def log_event(request: Request):
 async def send_notification(request: Request):
 
     data = await request.json()
+    
+    data["timestamp"] = datetime.utcnow().isoformat()
     
     logger.info(f"NOTIFICATION: {data}")
     

@@ -9,9 +9,28 @@ class RateLimiter:
     
     async def check_rate_limit(self, request: Request):
         # ОШИБКА: функция не реализована
-        # TODO: Реализовать проверку количества запросов от одного IP
-        # Если превышено - выбрасывать HTTPException(status_code=429)
-        pass
+        # ↓ ↓ ↓
+        # ФИКС: причина: функция не реализована, отсутствует счёт запросов
+        # ФИКС: Реализовал функцию, добавил счётчик запросов по IP
+        current_time = time.time()
 
-# ОШИБКА: rate limiter не подключён к middleware
+        client_ip = request.client.host
+
+        self.requests[client_ip] = [
+            t for t in self.requests[client_ip]
+            if current_time - t < 1
+        ]
+
+        if len(self.requests[client_ip]) >= 10:
+            raise HTTPException(
+                status_code=429,
+                detail="Слишком много запросов"
+            )
+
+        self.requests[client_ip].append(current_time)
+
+        # ОШИБКА: rate limiter не подключён к middleware
+        # ↓ ↓ ↓
+        # ФИКС: подключил в api_gateway\main.py
+
 rate_limiter = RateLimiter()
