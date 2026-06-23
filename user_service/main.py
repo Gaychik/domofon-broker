@@ -28,17 +28,48 @@ Base.metadata.create_all(bind=engine)
 
 #Создание пользователя
 # ПРОБЛЕМА: Нет проверки на существующий телефон
+# ↓ ↓ ↓
+# ФИКС: причина: в дб есть уникальность и выдаёт ошибку Internal Server Error, но в свмом коде проверка отсутствует  
+# ФИКС: Добавил проверку номера(строка 47-56), теперь выдаёт понятную ошибку
+
+
 # ПРОБЛЕМА: Не отправляет событие в Logging Service
+# ↓ ↓ ↓
+# ФИКС: причина: пользователь сразу создавался и ответ сразу возвращался(т.е. события не фиксировалось)
+# ФИКС: После сохранения добавил HTTP-запрос в logging_service (строка 48-57)
 
 @app.post("/users")
 async def create_user(phone: str, name: str):
 
     
     db = SessionLocal()
+
+    existing_user = db.query(User).filter(User.phone == phone).first()
+
+    if existing_user:
+        db.close()
+        raise HTTPException(
+            status_code=400,
+            detail="Номмер уже занят"
+        )
+
     user = User(phone=phone, name=name)
+
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            f"{LOGGING_SERVICE_URL}/log",
+            json={
+                "event": "user_created",
+                "user_id": user.id,
+                "phone": user.phone,
+                "name": user.name
+            }
+        )
+
     db.close()
     
     return {"id": user.id, "phone": user.phone, "name": user.name}

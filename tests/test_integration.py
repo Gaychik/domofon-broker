@@ -34,10 +34,25 @@ class TestIntegration:
     async def test_rate_limiting(self):
         #Тест rate limiting
         async with httpx.AsyncClient() as client:
+            #Получение JWT
+            login_response = await client.post(
+                "http://localhost:8000/api/auth/login",
+                json={
+                    "username": "admin",
+                    "password": "admin123"
+                }
+            )
+
+            token = login_response.json()["access_token"]
+
+            headers = {
+                "Authorization": f"Bearer {token}"
+            }
+
             # Отправляем 20 запросов подряд
             responses = []
             for i in range(20):
-                response = await client.get("http://localhost:8000/users/1")
+                response = await client.get("http://localhost:8000/users/1", headers=headers)
                 responses.append(response)
             
             # Некоторые запросы должны получить 429 Too Many Requests
