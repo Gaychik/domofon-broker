@@ -3,6 +3,10 @@ from fastapi.testclient import TestClient
 import sys
 import os
 
+os.environ["DATABASE_URL"] = "postgresql://domofon:domofon123@localhost:5432/domofon"
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 @pytest.fixture

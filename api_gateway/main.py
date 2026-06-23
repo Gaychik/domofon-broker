@@ -1,7 +1,20 @@
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 import httpx
 import os
+
 from dotenv import load_dotenv
+load_dotenv()
+
+try:
+    from jwt_auth import create_token, verify_token
+except ModuleNotFoundError:
+    from api_gateway.jwt_auth import create_token, verify_token
+    
+try:
+    from rate_limiter import rate_limiter
+except ModuleNotFoundError:
+    from api_gateway.rate_limiter import rate_limiter
 
 load_dotenv()
 
@@ -11,14 +24,73 @@ USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user_service:8001")
 CALL_SERVICE_URL = os.getenv("CALL_SERVICE_URL", "http://call_service:8002")
 
 # ПРОБЛЕМА: Нет проверки авторизации
-# ПРОБЛЕМА: Нет rate limiting
+# ↓ ↓ ↓
+# ФИКС: Обнаружил что отсутсвует проверка токена в @app.middleware("http")
+# ФИКС: Добавил проверку токена(проверяет заголовок X-User-Token)
+# ФИКС: Ошибка теперь возвращается в JSON
+# ФИКС: В ином случае выдается ошибка 401(Unauthorized), что означает отсутствие авторизации
 
+# ПРОБЛЕМА: Нет rate limiting
+# ↓ ↓ ↓
+# ФИКС: rate limiting сделан(см. в api_gateway\rate_limiter), и подключён (строка 3 и 36)
+# ФИКС: переделал обработчик ошибки т.к. выводилось 500, а не 429
+
+
+# !!! функция была переписана для добавления JWT авторизации !!!
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    # TODO: Должна быть проверка JWT токена
-    # Сейчас пропускает все запросы без проверки
+    if request.url.path == "/api/auth/login":
+        return await call_next(request)
+
+    authorization = request.headers.get("Authorization")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized"}
+        )
+
+    token = authorization.replace("Bearer ", "")
+
+    try:
+        verify_token(token)
+    except HTTPException as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"detail": e.detail}
+        )
+
+    try:
+        await rate_limiter.check_rate_limit(request)
+    except HTTPException as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"detail": e.detail}
+        )
+
     response = await call_next(request)
     return response
+
+# эндпоинт login(для JWT)
+@app.post("/api/auth/login")
+async def login(request: Request):
+    data = await request.json()
+
+    username = data.get("username")
+    password = data.get("password")
+
+    if username != "admin" or password != "admin123":
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid username or password"}
+        )
+
+    token = create_token(user_id=1, username=username)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }
 
 @app.post("/users")
 async def create_user(request: Request):
