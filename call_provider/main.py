@@ -1,38 +1,28 @@
 from fastapi import FastAPI
-import httpx
+from pydantic import BaseModel
 import os
 import random
+import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI(title="Call Provider")
 
-# ПРОБЛЕМА: Неправильный URL для Call Service
-# ПРОБЛЕМА: Пытается отправить результат обратно в Call Service,
-CALL_SERVICE_URL = os.getenv("CALL_SERVICE_URL", "http://localhost:8002")
+# ✅ Pydantic-модель для приёма JSON-тела
+class CallRequest(BaseModel):
+    user_id: int
+
 
 @app.post("/call")
-async def make_call(user_id: int):
-    #Симуляция внешнего провайдера звонков
+async def make_call(request: CallRequest):
+    user_id = request.user_id
     
-    # Симуляция обработки звонка
-    import asyncio
-    await asyncio.sleep(1)  # Симулируем задержку звонка
+    # Симуляция обработки звонка (задержка)
+    await asyncio.sleep(1)  
     
     # Случайный результат звонка
     status = random.choice(["answered", "busy", "no_answer"])
     
-    
-    # но использует неправильный URL 
-    async with httpx.AsyncClient() as client:
-        try:
-            await client.post(f"{CALL_SERVICE_URL}/call/callback", json={
-                "user_id": user_id,
-                "status": status
-            })
-        except:
-            # Ошибка соединения с Call Service
-            pass
-    
+    # Возвращаем результат синхронно
     return {"status": status, "user_id": user_id}

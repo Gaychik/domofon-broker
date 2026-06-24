@@ -101,16 +101,16 @@ docker-compose ps
 docker-compose up --build
 Проверка работоспособности
 # Должно работать после исправлений
-curl -X POST http://localhost:8000/users \
-  -H "X-User-Token: test" \
-  -H "Content-Type: application/json" \
+curl -X POST http://localhost:8000/users `
+  -H "X-User-Token: test" `
+  -H "Content-Type: application/json" `
   -d '{"phone":"+79991234567","name":"John"}'
 
-curl -X POST http://localhost:8000/call/initiate \
-  -H "X-User-Token: test" \
+curl -X POST http://localhost:8000/call/initiate `
+  -H "X-User-Token: test" `
   -d '{"user_id":1}'
 
-curl http://localhost:8000/history/1 \
+curl http://localhost:8000/history/1 `
   -H "X-User-Token: test"
 
 Сдача работы
