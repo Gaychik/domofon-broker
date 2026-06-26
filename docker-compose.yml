@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U domofon"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -25,8 +30,10 @@ services:
       DATABASE_URL: postgresql://domofon:domofon123@postgres:5432/domofon
       LOGGING_SERVICE_URL: http://logging_service:8004
     depends_on:
-      - postgres
-      - logging_service
+      postgres:
+        condition: service_healthy
+      logging_service:
+        condition: service_started
 
   call_service:
     build: ./call_service
@@ -35,19 +42,22 @@ services:
     environment:
       DATABASE_URL: postgresql://domofon:domofon123@postgres:5432/domofon
       REDIS_URL: redis://redis:6379
-      PROVIDER_URL: http://localhost:8003
+      PROVIDER_URL: http://call_provider:8003
+      LOGGING_SERVICE_URL: http://logging_service:8004
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      logging_service:
+        condition: service_started
 
   call_provider:
     build: ./call_provider
     ports:
       - "8003:8003"
     environment:
-      CALL_SERVICE_URL: http://localhost:8002
-    depends_on:
-      - call_service
+      CALL_SERVICE_URL: http://call_service:8002
 
   logging_service:
     build: ./logging_service
@@ -61,6 +71,8 @@ services:
     environment:
       USER_SERVICE_URL: http://user_service:8001
       CALL_SERVICE_URL: http://call_service:8002
+      JWT_SECRET_KEY: supersecretkeychangeinproduction
+      JWT_ALGORITHM: HS256
     depends_on:
       - user_service
       - call_service
