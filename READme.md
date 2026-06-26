@@ -118,3 +118,16 @@ curl http://localhost:8000/history/1 \
 •	Скриншот успешного pytest tests/
 •	Описание 3 самых сложных найденных багов
 Удачи!
+
+
+
+
+
+
+# Три самых сложных бага для описания в PR
+# 1. Docker networking — сервисы использовали localhost для обращения друг к другу, но в Docker каждый контейнер имеет свой localhost. # Исправлено: заменены URL на Docker-имена сервисов (call_provider, call_service)
+# 2. API Gateway авторизация — middleware пропускал все запросы без проверки. Добавлена проверка заголовка X-User-Token и возврат 401 при отсутствии токена. В middleware нельзя использовать HTTPException — нужно возвращать JSONResponse
+# 3. Call Service не сохранял звонки — после обращения к провайдеру звонка результат не записывался в PostgreSQL. Был мной добавлен db.add(call) + db.commit()
+
+# cd c:\Users\Академия\Desktop\domofon-broker (корневая папка)
+# python -m pytest tests/ -v --ignore=tests/test_integration.py (запуск теста)
